@@ -1,0 +1,326 @@
+---
+title: "Imputing Ecological Data"
+author: "Clement Ponsonnet"
+date: "November 2017"
+output:
+  html_document:
+    keep_md : true
+  html_notebook: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Questions
+
+**1 - When you suggest methods to deal with missing values to users, the recurrent question is "What is the percentage of missing values that I can have in my data set, is 50% too much but 20% OK?" What is your answer to this question?**
+
+*It depends on the dataset. If your data is highly correlated, you can have many missing values and impute precisely. If the data is vey noisy, even just a few missing values can be problematic. Multiple imputation can always be performed and enables us to estimate the variability of the predictions, which will tell us how much we can trust the result of the imputation*
+
+**2 - Explain the aims of multiple imputation in comparison to single imputation.**
+
+*With single imputation we underestimate the variance of our data that comes from the missing values. Multiple imputation is a way of conserving this variance because we impute both the missing values and their variability*
+
+**3 - Your aim is to impute a data set (predict as well as possible the missing values). You have 3 imputation methods available. How could you compare them?**
+
+*Do cross-validation: take a dataset where there is no missing data. Take out some data, and impute those missing values 3 times using each method. Each time, compute the errors of the predictions. Choose the method which yields the lowest mean square error (or other error metric)*
+
+
+## Continuous data with missing values - Regression with missing data via Multiple Imputation
+First of all you will need to install the following packages
+
+```{r eval=FALSE}
+install.packages("VIM")
+install.packages("missMDA")
+install.packages("Amelia")
+```
+
+```{r message=FALSE, warning=FALSE}
+library(VIM)
+library(missMDA)
+library(Amelia)
+library(FactoMineR)
+```
+
+Air pollution is currently one of the most serious public health worries worldwide. Many epidemiological studies
+have proved the influence that some chemical compounds, such as sulphur dioxide (SO2), nitrogen dioxide
+(NO2), ozone (O3) can have on our health. Associations set up to monitor air quality are active all over the
+world to measure the concentration of these pollutants. They also keep a record of meteorological conditions
+such as temperature, cloud cover, wind, etc.  
+
+We have at our disposal 112 observations collected
+during the summer of 2001 in Rennes. The variables available are 
+
+* maxO3 (maximum daily ozone) 
+* maxO3v (maximum daily ozone the previous day) 
+* T12 (temperature at midday) 
+* T9 
+* T15 (Temp at 3pm)
+* Vx12 (projection of the wind speed vector on the east-west axis at midday)
+* Vx9 and Vx15 as well as the Nebulosity (cloud) Ne9, Ne12, Ne15
+
+Here the final aim is to analyse the relationship between the
+maximum daily ozone (maxO3) level and the other meteorological variables. To do so we will perform regression to explain maxO3 in function of all the other variables. This data is incomplete (there are missing values). Indeed, it occurs frenquently to have machines that fail one day, leading to some information not recorded. We will therefore perform regression via multiple imputation.
+
+__(R1)__ Import the data.
+
+```{r data}
+ozo <- read.table("data/ozoneNA.csv",header=TRUE,
+sep=",", row.names=1)
+WindDirection <- ozo[,12]
+don <- ozo[,1:11]   #### keep only the continuous variables
+summary(don)
+head(don)
+```
+
+__(R2)__ Load the libraries.
+
+
+
+First, we perfom some descriptive statistics (how many missing? how many variables, individuals with missing?) and try to **inspect and vizualize the pattern of missing entries and get hints on the mechanism** that generated the missingness.  For this purpose, we use the R package **VIM** (Visualization and Imputation of Missing Values - Mathias Templ) as well as Multiple Correspondence Analysis (FactoMineR package). The package VIM provides tools for the visualization of missing or imputed values, which can be used for exploring the data and the structure of the missing or imputed values. Depending on this structure, they may help to identify the mechanism generating the missing values or errors, which may have happened in the imputation process. You should install the package VIM, then you can check the documentation by executing
+
+```{r VIM0, eval=FALSE}
+?VIM
+```
+
+The VIM function **aggr** calculates and plots the amount of missing entries in each variables and in some combinations of variables (that tend to be missing simultaneously).
+
+```{r, eval=FALSE}
+dim(na.omit(don))
+dim(don)
+res<-summary(aggr(don, sortVar=TRUE))$combinations
+```
+
+```{r, eval=FALSE}
+head(res[rev(order(res[,2])),])
+aggr(don, sortVar=TRUE)
+```
+
+
+The VIM function **matrixplot ** creates a matrix plot in which all cells of a data matrix are visualized by rectangles. Available data is coded according to a continuous color scheme (gray scale), while missing/imputed data is visualized by a clearly distinguishable color (red). If you use Rstudio the plot is not interactive (thus the warnings), but if you use R directly, you can click on a column of your choice, this will result in sorting the rows in the decreasing order of the values of this column. This is useful to check if there is an association between the value of a variable and the missingness of another one.
+
+```{r, eval=FALSE}
+matrixplot(don,sortby=2) # marche pas sur Rstudio
+```
+
+The VIM function **marginplot** creates a scatterplot with additional information on the missing values. If you plot the variables (x,y), the points with no missing values are represented as in a standard scatterplot. The points for which x (resp. y) is missing are represented in red along the y (resp. x) axis. In addition, boxplots of the x and y variables are represented along the axes with and without missing values (in red all variables x where y is missing, in blue all variables x where y is observed).
+
+```{r, eval=FALSE}
+marginplot(don[,c("T9","maxO3")])
+```
+
+__(Q3)__ Do you observe any associations between the missing entries ? When values are missing on a variable does it correspond to small or large values on another one ? (For this question you need to use the matrixplot function in R)
+
+*First of all, we see that only 13 out of the 112 rows do not have any missing values.*
+
+```{r, eval=FALSE}
+matrixplot(don,sortby=1)
+```
+*By playing around with the sortby 'argument' we notice:*
+
+* *maxO3 seems uncorrelated in terms with others of missing values* 
+* *T9, T12, T15 seem to all be correlated (both in terms of missing values but also in the value (temperature). From this we could deduce they tend to be missing for high values *
+* *Ne9, Ne12 and Ne15 are correlated. Again we can deduchigh values tend to miss more than low ones*
+* *Vx9 seems uncorrelated*
+* *Vx12 and Vx15 seem correlated*
+* *maxO3v seems uncorrelated*
+
+__(R3)__ Create a categorical dataset with "o" when the value of the cell is observed and "m" when it is missing, and with the same row and column names as in the original data. Then, you can perform Multiple Correspondence Analysis on the categories to visualize the association with the **MCA** function.
+
+```{r}
+class(don)
+cat <- don
+cat <- apply(cat, c(1,2), function(x) return(ifelse(is.na(x),'m','o')))
+MCA(cat)
+```
+
+**Interpretation**  
+*If variables are close (eg. T15_m and T9_m), this means that the missing values are correlated : when T15_m is missing, so is T9_m. The point T_15m corresponds to the barycenter of all the individuals for which T15 is missing. You can see the projection of the individuals on the second graph*
+
+
+Then, before modeling the data, we perform a **PCA with missing values** to explore the correlation between variables. Use the R package **missMDA** dedicated to perform principal components methods with missing values and to impute data with PC methods.
+
+```{r, eval =FALSE}
+library(missMDA)
+?missMDA
+```
+
+
+__(R4)__ Determine the number of components ncp to keep using the 
+**estim_ncpPCA** function. Perform PCA with missing values using the 
+**imputePCA** function and ncp components. Then plot the correlation circle.
+
+```{r eval=FALSE}
+?estim_ncpPCA
+?imputePCA
+```
+
+```{r}
+estim_ncpPCA(don)
+plot((0:5), estim_ncpPCA(don)$criterion)
+
+#Donne le nombre de composantes "optimal" par cross-validation
+estim_ncpPCA(don)$ncp
+
+#Complete les missing values
+completed_don <- imputePCA(don, ncp = estim_ncpPCA(don)$ncp)$completeObs
+
+
+PCA(completed_don)
+```
+
+
+
+__(Q4)__ Could you guess how cross-validation is performed to select the number of components?
+
+*Probably by doing the imputePCA on a test set for different numbers of components. And choosing the number of components that gives the lowest mean square error*
+
+Then, to run the regression with missing values, we use **Multiple Imputation**. We impute the data either assuming 1) a Gaussian distribution (library Amelia) or 2) a PCA based model (library missMDA). 
+Note that there are two ways to impute either using a Joint Modeling (one joint probabilitisc model for the variables all together)
+or a Condional Modeling (one model per variable) approach. We refer to the references given in the slides for more details.  We use the R package **Amelia**. We generate 100 imputed data sets with the amelia method:
+
+```{r }
+library(Amelia)
+```
+
+```{r eval=FALSE}
+?amelia
+```
+
+```{r}
+res.amelia <- amelia(don, m=100)  
+#names(res.amelia$imputations) 
+res.amelia$imputations$imp1 
+```
+
+__(R5)__ Now generate 100 imputed data sets with the MIPCA method and 2 components. Store the result in a variable called res.MIPCA.
+
+```{r eval=FALSE}
+?MIPCA
+?plot.MIPCA
+```
+
+```{r eval=FALSE, echo=FALSE}
+#Imputation with PCA
+res.MIPCA <- MIPCA(don, ncp=2,nboot=100) # MI with PCA using 2 dimensions 
+plot(res.MIPCA)
+```
+
+We will **inspect the imputed values created** to know if the imputation method should require more investigation or if we can continue and analyze the data. A common practice consists in comparing the distribution of the imputed values and of the observed values. Check the **compare.density** function and apply it to compare the distributions of the T12 variable.
+
+```{r  eval=FALSE}
+?compare.density
+```
+
+```{r}
+compare.density(res.amelia, var = 8)
+```
+
+
+__(Q5)__ Do both distributions need to be close? Could the missing values differ from the observed ones both in spread and in location? 
+
+*Not necessarily, they should only be close if the missing values are missing at random (MCAR)*
+
+The quality of imputation can also be assessed with cross-validation using the **overimpute** function. Each observed value is deleted and for each one 100 values are predicted (using the same MI method) and the mean and 90% confidence intervals are computed for these 100 values. Then, we inspect whether the observed value falls within the obtained interval. On the graph, the y=x line is plotted (where the imputations should fall if they were perfect), as well as the mean (dots) and intervals (lines) for each value. Around ninety percent of these confidence intervals should contain the y = x line, which means that the true observed value falls
+within this range. The color of the line (as coded in the legend) represents the
+fraction of missing observations in the pattern of missingness for that observation (ex: blue=0-2 missing entries). 
+
+```{r eval=FALSE}
+?overimpute
+```
+
+```{r}
+overimpute(res.amelia,3)
+```
+
+
+__(Q6)__ Comment the quality of the imputation.
+
+*The data is rather well imputed: there are only a few values where the confidence interval does not coincide with the line *
+
+We can also examine the variability by projecting as supplementary tables the imputed data sets on the PCA configuration (plot the results of MI with PCA).
+
+```{r eval=FALSE}
+plot(res.MIPCA,choice= "ind.supp")
+plot(res.MIPCA,choice= "var")
+```
+
+__(R6)__ Apply a regression model on each imputed data set of the amelia method. Hint: a regression with several variables can be performed as follows 'lm(formula="maxO3 ~ T9+T12", data =don)'. You can also use the function
+**with**.
+
+__(R7)__ Now do the same with the imputed datasets of the MIPCA method.
+
+
+The package **mice** (Multiple Imputation by Chained Equations) allows to aggregate the results from some simple models.
+
+```{r }
+library(mice)
+# ?mice
+# pool is a function from mice to aggregate the results according to Rubin's rule
+# ?pool
+```
+
+
+__(R8)__ Aggregate the results of Regression with Multiple Imputation according to Rubin's rule (slide "Multiple imputation") for MI with amelia with the 
+**pool** function from the mice package.
+
+```{r eval=FALSE}
+poolamelia<-pool(as.mira(fitamelia)) 
+summary(poolamelia)
+```
+
+__(R9)__ Now do the same with the MIPCA results.
+
+__(R10)__ Write a function that removes the variables with the largest pvalues step by step (each time a variable is removed the regression model is performed again) until all variables are significant.
+
+
+#### EM algorithm
+
+In this simple setting, we have an explicit expression of the maximum likelihood estimator despite missing values. However, this is not always the case but it is possible to use an EM algorithm which allows to get the maximum likelihood estimators in the cases where data are missing.
+
+The EM algorithm consists in maximizing the "observed likelihood" 
+$$l(\mu, \Sigma|y_1,y_2)=-\frac{n}{2}\log(\sigma_{11}^2)-\frac{1}{2}\sum_{i=1}^n\frac{(y_{i1}-\mu_1)^2}{\sigma_{11}^2}-\frac{r}{2}\log((\sigma_{22}-\frac{\sigma_{12}^2}{\sigma_{11}})^2)$$
+$$-\frac{1}{2}\sum_{i=1}^r\frac{(y_{i2}-\mu_2-\frac{\sigma_{12}}{\sigma_{11}}(y_{i1}-\mu_1))^2}{(\sigma_{22}-\frac{\sigma_{12}^2}{\sigma_{11}})^2},$$
+through successive maximization of the "complete likelihood" (if we had observed all $n$ realizations of $y_1$ and $y_2$). Maximizing the complete likelihood 
+$$l_c(\mu, \Sigma|y_1,y_2)=-\frac{n}{2}\log(\det(\Sigma))-\frac{1}{2}\sum_{i=1}^n(y_{i1}-\mu_1)^T\Sigma^{-1}(y_{i1}-\mu_1)$$
+
+would be straightforward if we had all the observations. However elements of this likelihood are not available. Consequently, we replace them by the conditional expectation given observed data and the parameters of the current iteration. These two steps of computation of the conditional expectation (E-step) and maximization of the completed likelihood (M step) are repeated until convergence. 
+
+The update formulas for the E and M steps are the following  
+
+__E step__:
+
+The sufficient statistics of the likelihood are:  
+
+$$s_1=\sum_{i=1}^ny_{i1},\quad s_2=\sum_{i=1}^ny_{i2},\quad s_{11}=\sum_{i=1}^ny_{i1}^2,\quad s_{22}=\sum_{i=1}^ny_{i2}^2,\quad s_{12}=\sum_{i=1}^ny_{i1}y_{i2}.$$
+
+Since some values of $y_2$ are not available, we fill in the sufficient statistics with:
+
+$$E[y_{i2}|y_{i1},\mu,\Sigma]=\beta_{20.1}+\beta_{21.1}y_{i1}$$
+$$E[y_{i2}^2|y_{i1},\mu,\Sigma]=(\beta_{20.1}+\beta_{21.1}y_{i1})^2+\sigma_{22.1}$$
+$$E[y_{i2}y_{i2}|y_{i1},\mu,\Sigma]=(\beta_{20.1}+\beta_{21.1}y_{i1})y_{i1}.$$
+
+__M step__: 
+
+The M step consists in computing the maximum likelihood estimates as usual. 
+Given $s_1, s_2, s_{11}, s_{22}, \text{and } s_{12},$ update $\hat{\mu}$ and $\hat{\sigma}$ with
+$$\hat{\mu}_1=s_1/n\text{, }\hat{\mu}_2=s_2/n,$$
+$$\hat{\sigma}_1=s_{11}/n-\hat{\mu}_1^2\text{, }\hat{\sigma}_2=s_{22}/n-\hat{\mu}_2^2\text{, }\hat{\sigma}_{12}=s_{12}/n-\hat{\mu}_1\hat{\mu}_2$$
+
+Note that $s_1$, $s_{11}$, $\hat{\mu}_1$ and $\hat{\sigma}_1$ are constant accross iterations since we do not have missing values on $y_1$.
+
+__(R11)__ Write two functions called Estep and Mstep that respectively perform the E step and the M step. 
+The Estep function can take as an input $\mu$ and $\Sigma$. Then, you can compute 
+$\beta_{21.1}=\sigma_{12}/\sigma_{11}$, $\beta_{20.1}=\mu_2-\beta_{21.1}\mu_1$, and $\sigma_{22.1}=\sigma_{22}-\sigma^2_{12}/\sigma_{11}$  and update the sufficient statistics $s_{ij}$.
+The Mstep function consists in updating the update the $\mu$ and $\Sigma$ given the $s_{ij}$.
+
+
+__(Q7)__ How could we initialize the algorithm ?
+
+__(R12)__ Implement a function called initEM that returns initial values for $\hat{\mu}$ and $\hat{\Sigma}$.
+
+__(R13)__ Implement the EM algorithm over 15 iterations and plot the value of $\left\|\mu-\hat{\mu}\right\|^2$ over iterations. Comment your results briefly.
+
+__(R14)__ Check that the EM estimator $\mu$ is equal to the maximum likelihood estimator.
+
