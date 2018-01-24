@@ -132,6 +132,8 @@ We can see here that the distribution of T9 is the same when maxO3 is oberved an
 
 **The plots we have showed so far are useful because they may help to identify the mechanism generating the missing values or errors, which may have happened in the imputation process. This is useful to check if there is an association between the value of a variable and the missingness of another one. Do you observe any associations between the missing entries ? When values are missing on a variable does it correspond to small or large values on another one ?**
 
+
+
 __(R3)__ Create a categorical dataset with "o" when the value of the cell is observed and "m" when it is missing, and with the same row and column names as in the original data. Then, you can perform Multiple Correspondence Analysis on the categories to visualize the association with the **MCA** function.
 
 ```{r}
@@ -142,10 +144,11 @@ MCA(cat)
 ```
 
 **Interpretation**  
-*If variables are close on the variables factor map (eg. T15_m and T9_m), this means that the missing values are correlated : when T15_m is missing, so is T9_m. The point T_15m corresponds to the barycenter of all the individuals for which T15 is missing. You can see the projection of the individuals on the second graph (which is called the individuals factor map)*
+*If variables are close on the variables factor map (eg. T15_m and T9_m), this means that the missing values are correlated : when T15_m is missing, so is T9_m. The point T_15m corresponds to the barycenter of all the individuals for which T15 is missing. You can see the projection of the individuals on the second graph (which we call the individuals factor map)*
 
+###Single imputation
 
-Then, before modeling the data, we perform a **PCA with missing values** to explore the correlation between variables. Use the R package **missMDA** dedicated to perform principal components methods with missing values and to impute data with PC methods.
+Then, before modeling the data, we perform a **PCA with missing values** to explore the correlation between variables. Use the R package **missMDA** dedicated to perform principal components methods with missing values and to impute data with principal components methods.
 
 ```{r, eval =FALSE}
 library(missMDA)
@@ -178,13 +181,27 @@ PCA(completed_don)
 
 
 
-__(Q4)__ Could you guess how cross-validation is performed to select the number of components?
+**4. Explain quickly how this analysis is performed. Could you guess how cross-validation is performed to select the number of components?**
 
-*Probably by doing the imputePCA on a test set for different numbers of components. And choosing the number of components that gives the lowest mean square error*
+*The package missMDA allows the use of principal component methods to impute an incomplete data set. To achieve this goal in the case of PCA, the missing values are predicted using the iterative PCA algorithm for a predefined number of dimensions. Then, PCA is performed on the imputed data set. The single imputation step requires tuning the number of dimensions used to impute the data, which is where cross-validation comes in.*
 
-Then, to run the regression with missing values, we use **Multiple Imputation**. We impute the data either assuming 1) a Gaussian distribution (library Amelia) or 2) a PCA based model (library missMDA). 
+*The cross-validation is performed with the Kfold methodFor the Kfold. A percentage pNA of missing values is inserted and predicted with a PCA model using ncp.min to ncp.max dimensions. This process is repeated nbsim times. The number of components which leads to the smallest MSEP (Mean Standard Error of Prediction) is retained.*
+
+*Through the argument method.cv, the function estim_ncpPCA proposes several cross-validation procedures to choose this number. The default method is the generalised cross-validation method (method.cv=“gcv”). It consists in searching the number of dimensions which minimises the generalised cross-validation criterion, which can be seen as an approximation of the leave-one-out cross-validation criterion. The procedure is very fast, because it does not require adding explicitly missing values and predicting them for each cell of the data set. However, the number of dimensions minimising the criterion can sometimes be unobvious when several local minimum occur. In such a case, more computationally intensive methods, those performing explicit cross-validation, can be used, such as Kfold (method.cv=“Kfold”) or leave-one-out (method.cv=“loo”).*
+
+*The Kfold cross-validation suggests to retain 2 dimensions for the imputation of the data set.*
+
+*Thus, the incomplete data set can be imputed using the function imputePCA performing the iterative PCA algorithm, specifying the number of dimensions through the argument ncp=2. At convergence the algorithm provides both an estimation of the scores and loadings as well as a completed data set. The imputePCA function outputs the imputed data set. The completed data set is in the object completeObs.*
+
+*The imputePCA function also outputs the fitted matrix X̂ X^ in the object fitted.*
+
+###Multiple imputation
+
+Then, to run the regression with missing values, we use **Multiple Imputation**. We impute the data either assuming 1) a Gaussian distribution (library Amelia) or 2) a PCA based model (library missMDA).
 Note that there are two ways to impute either using a Joint Modeling (one joint probabilitisc model for the variables all together)
-or a Condional Modeling (one model per variable) approach. We refer to the references given in the slides for more details.  We use the R package **Amelia**. We generate 100 imputed data sets with the amelia method:
+or a Condional Modeling (one model per variable) approach. We refer to the references given in the class slides for more details.  We use the R package **Amelia**. We generate 100 imputed data sets with the amelia method:
+
+First we show how to impute one data set using **Amelia**
 
 ```{r }
 library(Amelia)
@@ -197,10 +214,10 @@ library(Amelia)
 ```{r}
 res.amelia <- amelia(don, m=100)  
 #names(res.amelia$imputations) 
-res.amelia$imputations$imp1 
+res.amelia$imputations$imp1  #the first imputed data set
 ```
 
-__(R5)__ Now generate 100 imputed data sets with the MIPCA method and 2 components. Store the result in a variable called res.MIPCA.
+__(R5)__ Now we generate 100 imputed data sets with the MIPCA method and 2 components. Store the result in a variable called res.MIPCA.
 
 ```{r eval=FALSE}
 ?MIPCA
@@ -212,6 +229,10 @@ __(R5)__ Now generate 100 imputed data sets with the MIPCA method and 2 componen
 res.MIPCA <- MIPCA(don, ncp=2,nboot=100) # MI with PCA using 2 dimensions 
 plot(res.MIPCA)
 ```
+
+The function MIPCA gives as output the data set imputed by the iterative PCA algorithm (in res.imputePCA) and the other data sets generated by the MIPCA algorithm (in res.MI). The number of data sets generated by this algorithm is controlled by the nboot argument, equal to 100 by default. The other arguments of this function are the same as those for the imputePCA function.
+
+Exploratory analysis is very important and even at this stage of the analysis.
 
 We will **inspect the imputed values created** to know if the imputation method should require more investigation or if we can continue and analyze the data. A common practice consists in comparing the distribution of the imputed values and of the observed values. Check the **compare.density** function and apply it to compare the distributions of the T12 variable.
 
@@ -226,7 +247,7 @@ compare.density(res.amelia, var = 8)
 
 __(Q5)__ Do both distributions need to be close? Could the missing values differ from the observed ones both in spread and in location? 
 
-*Not necessarily, they should only be close if the missing values are missing at random (MCAR)*
+*Not necessarily, they should only be close if the missing values are missing completely at random (MCAR). Here the difference in the densities is not a problem. It indicates the missing values for Vx9 be missing at random (MAR) or missing not at random (MNAR). In any case, we should investigate the data to explain this difference*
 
 The quality of imputation can also be assessed with cross-validation using the **overimpute** function. Each observed value is deleted and for each one 100 values are predicted (using the same MI method) and the mean and 90% confidence intervals are computed for these 100 values. Then, we inspect whether the observed value falls within the obtained interval. On the graph, the y=x line is plotted (where the imputations should fall if they were perfect), as well as the mean (dots) and intervals (lines) for each value. Around ninety percent of these confidence intervals should contain the y = x line, which means that the true observed value falls
 within this range. The color of the line (as coded in the legend) represents the
@@ -243,7 +264,7 @@ overimpute(res.amelia,3)
 
 __(Q6)__ Comment the quality of the imputation.
 
-*The data is rather well imputed: there are only a few values where the confidence interval does not coincide with the line *
+*The data is rather well imputed: there are very few values where the confidence interval does not coincide with the line *
 
 We can also examine the variability by projecting as supplementary tables the imputed data sets on the PCA configuration (plot the results of MI with PCA).
 
@@ -252,8 +273,16 @@ plot(res.MIPCA,choice= "ind.supp")
 plot(res.MIPCA,choice= "var")
 ```
 
-__(R6)__ Apply a regression model on each imputed data set of the amelia method. Hint: a regression with several variables can be performed as follows 'lm(formula="maxO3 ~ T9+T12", data =don)'. You can also use the function
-**with**.
+*The plots represent the projection of the individuals (top) and variables (bottom) of each imputed data set as supplementary elements onto the reference configuration obtained with the iterative PCA algorithm. For the individuals, a confidence area is constructed for each individual which has a missing value, and if one has no missing entries, its confidence area is restricted to a point. All the plots show that the variability across different imputations is small and a user can interpret the PCA results with confidence.*
+
+__(R6)__ Apply a regression model on each imputed data set of the amelia method. Hint: a regression with several variables can be performed as follows 'lm(formula="maxO3 ~ T9+T12", data =don)'. You can also use the function**with**.
+
+```{r}
+resamelia <- lapply(res.amelia$imputations, as.data.frame)
+fitamelia <- lapply(resamelia, with, 
+                    lm(maxO3 ~ T9+T12+T15+Ne9+Ne12+Ne15+Vx9+Vx12+Vx15+maxO3v))
+```
+
 
 __(R7)__ Now do the same with the imputed datasets of the MIPCA method.
 
