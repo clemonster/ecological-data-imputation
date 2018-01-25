@@ -202,6 +202,7 @@ Note that there are two ways to impute either using a Joint Modeling (one joint 
 or a Condional Modeling (one model per variable) approach. We refer to the references given in the class slides for more details.  We use the R package **Amelia**. We generate 100 imputed data sets with the amelia method:
 
 First we show how to impute one data set using **Amelia**
+We will impute the data set 100 times
 
 ```{r }
 library(Amelia)
@@ -212,9 +213,10 @@ library(Amelia)
 ```
 
 ```{r}
-res.amelia <- amelia(don, m=100)  
+#This function imputes 100 datasets. To not clutter our report, we use set "p2s=0" to decrease the verbosity of the amelia function.
+res.amelia <- amelia(don, m=100, p2s = 0)  
 #names(res.amelia$imputations) 
-res.amelia$imputations$imp1  #the first imputed data set
+head(res.amelia$imputations$imp1)  #the first imputed data set
 ```
 
 __(R5)__ Now we generate 100 imputed data sets with the MIPCA method and 2 components. Store the result in a variable called res.MIPCA.
@@ -224,7 +226,7 @@ __(R5)__ Now we generate 100 imputed data sets with the MIPCA method and 2 compo
 ?plot.MIPCA
 ```
 
-```{r eval=FALSE, echo=FALSE}
+```{r eval=TRUE}
 #Imputation with PCA
 res.MIPCA <- MIPCA(don, ncp=2,nboot=100) # MI with PCA using 2 dimensions 
 plot(res.MIPCA)
@@ -247,7 +249,7 @@ compare.density(res.amelia, var = 8)
 
 __(Q5)__ Do both distributions need to be close? Could the missing values differ from the observed ones both in spread and in location? 
 
-*Not necessarily, they should only be close if the missing values are missing completely at random (MCAR). Here the difference in the densities is not a problem. It indicates the missing values for Vx9 be missing at random (MAR) or missing not at random (MNAR). In any case, we should investigate the data to explain this difference*
+*Not necessarily, they should only be close if the missing values are missing completely at random (MCAR). Here the difference in the densities is not a problem. It indicates the missing values for Vx9 may be missing at random (MAR) or missing not at random (MNAR). In any case, we should investigate the data to explain this difference*
 
 The quality of imputation can also be assessed with cross-validation using the **overimpute** function. Each observed value is deleted and for each one 100 values are predicted (using the same MI method) and the mean and 90% confidence intervals are computed for these 100 values. Then, we inspect whether the observed value falls within the obtained interval. On the graph, the y=x line is plotted (where the imputations should fall if they were perfect), as well as the mean (dots) and intervals (lines) for each value. Around ninety percent of these confidence intervals should contain the y = x line, which means that the true observed value falls
 within this range. The color of the line (as coded in the legend) represents the
@@ -284,8 +286,7 @@ fitamelia <- lapply(resamelia, with,
 ```
 
 
-__(R7)__ Now do the same with the imputed datasets of the MIPCA method.
-
+Now we do the same with the imputed datasets of the MIPCA method.
 
 The package **mice** (Multiple Imputation by Chained Equations) allows to aggregate the results from some simple models.
 
@@ -298,7 +299,7 @@ library(mice)
 
 
 __(R8)__ Aggregate the results of Regression with Multiple Imputation according to Rubin's rule (slide "Multiple imputation") for MI with amelia with the 
-**pool** function from the mice package.
+**pool** function from the mice package, to which we will pass our '''fitamelia''' object. This function will average the estimates of the complete data model, and compute the total variance over the repeated analyses.
 
 ```{r eval=FALSE}
 poolamelia<-pool(as.mira(fitamelia)) 
@@ -307,8 +308,33 @@ summary(poolamelia)
 
 __(R9)__ Now do the same with the MIPCA results.
 
+
+```{r}
+fitMIPCA <- lapply(res.MIPCA$res.MI, with, 
+                    lm(maxO3 ~ T9+T12+T15+Ne9+Ne12+Ne15+Vx9+Vx12+Vx15+maxO3v))
+```
+
+
+```{r}
+poolMIPCA<-pool(as.mira(fitMIPCA))
+summary(poolMIPCA)
+```
+*We see that the estimates are sometimes very different. However, many variables are not significant. We would like to compare the result of our linear regressions when we keep only the significant variables*
+
 __(R10)__ Write a function that removes the variables with the largest pvalues step by step (each time a variable is removed the regression model is performed again) until all variables are significant.
 
+```{r}
+don2 <- don
+reg <- lm(maxO3 ~. , data = don2)
+while(any(summary(reg)$coeff[-1, 4]>0.05)){
+  don2 <- don2[,!(colnames(don2)%in%names(which.max(summary(reg)$coeff[-1, 4])))]
+  reg <- lm(maxO3 ~. , data = don2)
+  }
+reg
+```
+
+Now apply this function to amelia and MIPCA results.
+**Still need to do this**
 
 #### EM algorithm
 
