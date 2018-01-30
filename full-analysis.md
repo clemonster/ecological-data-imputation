@@ -131,14 +131,65 @@ The VIM function **aggr** calculates and plots the amount of missing entries in 
 
 ```r
 paste("dimensions of total dataset: ", dim(don))
+```
+
+```
+## [1] "dimensions of total dataset:  112" "dimensions of total dataset:  11"
+```
+
+```r
 paste("dimensions of dataset if we remove rows with missing values: ", dim(na.omit(don)))
+```
+
+```
+## [1] "dimensions of dataset if we remove rows with missing values:  13"
+## [2] "dimensions of dataset if we remove rows with missing values:  11"
+```
+
+```r
 dim(na.omit(don))
+```
+
+```
+## [1] 13 11
+```
+
+```r
 res<-summary(aggr(don, sortVar=TRUE))$combinations
+```
+
+![](full-analysis_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
+
+```
+## 
+##  Variables sorted by number of missings: 
+##  Variable      Count
+##      Ne12 0.37500000
+##        T9 0.33035714
+##       T15 0.33035714
+##       Ne9 0.30357143
+##       T12 0.29464286
+##      Ne15 0.28571429
+##      Vx15 0.18750000
+##       Vx9 0.16071429
+##     maxO3 0.14285714
+##    maxO3v 0.10714286
+##      Vx12 0.08928571
 ```
 
 
 ```r
 head(res[rev(order(res[,2])),])
+```
+
+```
+##             Combinations Count   Percent
+## 1  0:0:0:0:0:0:0:0:0:0:0    13 11.607143
+## 45 0:1:1:1:0:0:0:0:0:0:0     7  6.250000
+## 10 0:0:0:0:0:1:0:0:0:0:0     5  4.464286
+## 35 0:1:0:0:0:0:0:0:0:0:0     4  3.571429
+## 41 0:1:0:0:1:1:1:0:0:0:0     3  2.678571
+## 28 0:0:1:0:0:0:0:0:0:0:0     3  2.678571
 ```
 In the combinations column, 1 means the variable is missing, 0 means it is observed.
 
@@ -149,7 +200,7 @@ So the most  frequent combination is the one where all the variables are observe
 aggr(don, sortVar=TRUE)
 ```
 
-![](full-analysis_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+![](full-analysis_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
 
 ```
 ## 
@@ -175,6 +226,14 @@ The VIM function **matrixplot ** creates a matrix plot in which all cells of a d
 ```r
 matrixplot(don,sortby=2) # marche pas sur Rstudio
 ```
+
+![](full-analysis_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+
+```
+## 
+## Click in a column to sort by the corresponding variable.
+## To regain use of the VIM GUI and the R console, click outside the plot region.
+```
 Here, "red" means data is missing. Non-missing data are on a gray scale with darker shades indicating higher values.  
 We notice that often when T9 is missing, T12 and T15 are also missing. When T9 is missing, we do not see more black or white values associated to other variables which should imply that when T9 is missing it would have corresponded to high or low values in another variable. This would have suggested missing at random (MAR) missing values for instance. Here everything points to missing completely at random (MCAR) values.
 
@@ -193,6 +252,8 @@ The VIM function **marginplot** creates a scatterplot with additional informatio
 ```r
 marginplot(don[,c("T9","maxO3")])
 ```
+
+![](full-analysis_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
 We can see here that the distribution of T9 is the same when maxO3 is oberved and when maxO3 is missing. If the two boxplots (red and blue) would have been very different it would imply that when maxO3 is missing the values of T9 can be very high or very low which lead to suspect the MAR hypothesis
 
@@ -217,7 +278,7 @@ cat <- apply(cat, c(1,2), function(x) return(ifelse(is.na(x),'m','o')))
 MCA(cat)
 ```
 
-![](full-analysis_files/figure-html/unnamed-chunk-8-1.png)<!-- -->![](full-analysis_files/figure-html/unnamed-chunk-8-2.png)<!-- -->![](full-analysis_files/figure-html/unnamed-chunk-8-3.png)<!-- -->
+![](full-analysis_files/figure-html/unnamed-chunk-9-1.png)<!-- -->![](full-analysis_files/figure-html/unnamed-chunk-9-2.png)<!-- -->![](full-analysis_files/figure-html/unnamed-chunk-9-3.png)<!-- -->
 
 ```
 ## **Results of the Multiple Correspondence Analysis (MCA)**
@@ -282,7 +343,7 @@ estim_ncpPCA(don)
 plot((0:5), estim_ncpPCA(don)$criterion)
 ```
 
-![](full-analysis_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+![](full-analysis_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
 ```r
 #Donne le nombre de composantes "optimal" par cross-validation
@@ -301,7 +362,7 @@ completed_don <- imputePCA(don, ncp = estim_ncpPCA(don)$ncp)$completeObs
 PCA(completed_don)
 ```
 
-![](full-analysis_files/figure-html/unnamed-chunk-11-2.png)<!-- -->![](full-analysis_files/figure-html/unnamed-chunk-11-3.png)<!-- -->
+![](full-analysis_files/figure-html/unnamed-chunk-12-2.png)<!-- -->![](full-analysis_files/figure-html/unnamed-chunk-12-3.png)<!-- -->
 
 ```
 ## **Results for the Principal Component Analysis (PCA)**
@@ -371,22 +432,28 @@ head(res.amelia$imputations$imp1)  #the first imputed data set
 
 ```
 ##          maxO3       T9      T12      T15      Ne9     Ne12      Ne15
-## 20010601    87 15.60000 18.50000 15.29467 4.000000 4.000000 8.0000000
-## 20010602    82 18.48278 22.16829 20.97779 5.000000 5.000000 7.0000000
-## 20010603    92 15.30000 17.60000 19.50000 2.000000 2.716205 0.6915804
-## 20010604   114 16.20000 19.70000 22.64662 1.000000 1.000000 0.0000000
-## 20010605    94 16.77517 20.50000 20.40000 4.914559 5.388465 6.7669230
-## 20010606    80 17.70000 19.80000 18.30000 6.000000 7.476213 7.0000000
-##                Vx9      Vx12    Vx15 maxO3v
-## 20010601  0.694600 -1.710100 -0.6946     84
-## 20010602 -4.330100 -4.000000 -3.0000     87
-## 20010603  2.954400 -1.086839  0.5209     82
-## 20010604  2.820953  0.347300 -0.1736     92
-## 20010605 -0.500000 -2.954400 -4.3301    114
-## 20010606 -5.638200 -5.000000 -6.0000     94
+## 20010601    87 15.60000 18.50000 16.81339 4.000000 4.000000 8.0000000
+## 20010602    82 17.76453 20.35304 19.36645 5.000000 5.000000 7.0000000
+## 20010603    92 15.30000 17.60000 19.50000 2.000000 3.292384 0.9067122
+## 20010604   114 16.20000 19.70000 22.69258 1.000000 1.000000 0.0000000
+## 20010605    94 17.98661 20.50000 20.40000 5.135895 4.341588 4.9925976
+## 20010606    80 17.70000 19.80000 18.30000 6.000000 6.531402 7.0000000
+##                 Vx9      Vx12    Vx15 maxO3v
+## 20010601  0.6946000 -1.710100 -0.6946     84
+## 20010602 -4.3301000 -4.000000 -3.0000     87
+## 20010603  2.9544000  2.520491  0.5209     82
+## 20010604  0.3827206  0.347300 -0.1736     92
+## 20010605 -0.5000000 -2.954400 -4.3301    114
+## 20010606 -5.6382000 -5.000000 -6.0000     94
 ```
 
 __(R5)__ Now we generate 100 imputed data sets with the MIPCA method and 2 components. Store the result in a variable called res.MIPCA.
+
+
+```r
+library(missMDA)
+```
+
 
 
 ```r
@@ -398,7 +465,6 @@ __(R5)__ Now we generate 100 imputed data sets with the MIPCA method and 2 compo
 ```r
 #Imputation with PCA
 res.MIPCA <- MIPCA(don, ncp=2,nboot=100) # MI with PCA using 2 dimensions 
-plot(res.MIPCA)
 ```
 
 The function MIPCA gives as output the data set imputed by the iterative PCA algorithm (in res.imputePCA) and the other data sets generated by the MIPCA algorithm (in res.MI). The number of data sets generated by this algorithm is controlled by the nboot argument, equal to 100 by default. The other arguments of this function are the same as those for the imputePCA function.
@@ -417,7 +483,7 @@ We will **inspect the imputed values created** to know if the imputation method 
 compare.density(res.amelia, var = 8)
 ```
 
-![](full-analysis_files/figure-html/unnamed-chunk-18-1.png)<!-- -->
+![](full-analysis_files/figure-html/unnamed-chunk-20-1.png)<!-- -->
 
 
 __(Q5)__ Do both distributions need to be close? Could the missing values differ from the observed ones both in spread and in location? 
@@ -438,7 +504,7 @@ fraction of missing observations in the pattern of missingness for that observat
 overimpute(res.amelia,3)
 ```
 
-![](full-analysis_files/figure-html/unnamed-chunk-20-1.png)<!-- -->
+![](full-analysis_files/figure-html/unnamed-chunk-22-1.png)<!-- -->
 
 
 __(Q6)__ Comment the quality of the imputation.
@@ -512,29 +578,29 @@ summary(poolMIPCA)
 
 ```
 ##                    est          se          t       df    Pr(>|t|)
-## (Intercept) 14.4359092 18.38173952  0.7853397 63.21523 0.435188027
-## T9           1.1284313  1.25130990  0.9018000 51.38538 0.371370790
-## T12          1.5840443  1.02288452  1.5486052 53.17702 0.127408069
-## T15          0.7009550  0.91385567  0.7670303 52.60304 0.446492538
-## Ne9         -1.2425372  1.17652790 -1.0561051 57.21914 0.295358945
-## Ne12        -1.7989403  1.61191503 -1.1160268 47.81316 0.269988222
-## Ne15         0.2638074  1.18216927  0.2231554 59.17931 0.824183067
-## Vx9          0.6413610  1.07806877  0.5949166 68.42441 0.553861554
-## Vx12         0.9336366  1.17394343  0.7952995 66.81171 0.429255734
-## Vx15         0.3316856  1.15892318  0.2862016 63.16198 0.775660372
-## maxO3v       0.2472175  0.09223892  2.6801860 67.95228 0.009224308
+## (Intercept) 13.0379559 18.32459085  0.7115005 63.95279 0.479361422
+## T9           0.9626278  1.23601493  0.7788157 52.51104 0.439583943
+## T12          1.6300189  1.05165684  1.5499532 49.62244 0.127507659
+## T15          0.7775725  0.90508165  0.8591186 53.49534 0.394108526
+## Ne9         -1.3000097  1.09609052 -1.1860423 66.24426 0.239842269
+## Ne12        -1.5794111  1.49121533 -1.0591436 55.06135 0.294158701
+## Ne15         0.2948481  1.19388588  0.2469651 57.90081 0.805808806
+## Vx9          0.8249507  1.02878192  0.8018713 74.68634 0.425171415
+## Vx12         0.8783954  1.13541138  0.7736363 70.63821 0.441727351
+## Vx15         0.2614394  1.13099588  0.2311586 66.68955 0.817899342
+## maxO3v       0.2540498  0.08859993  2.8673812 74.82388 0.005373524
 ##                    lo 95      hi 95 nmis       fmi    lambda
-## (Intercept) -22.29461873 51.1664371   NA 0.3384367 0.3178322
-## T9           -1.38322084  3.6400833   NA 0.4480977 0.4270269
-## T12          -0.46744287  3.6355314   NA 0.4309210 0.4099128
-## T15          -1.13233031  2.5342403   NA 0.4363989 0.4153702
-## Ne9          -3.59829813  1.1132238   NA 0.3929683 0.3721150
-## Ne12         -5.04023991  1.4423593   NA 0.4830576 0.4618771
-## Ne15         -2.10155785  2.6291727   NA 0.3749283 0.3541546
-## Vx9          -1.50965011  2.7923722   NA 0.2924019 0.2720171
-## Vx12         -1.40968572  3.2769589   NA 0.3065454 0.2860930
-## Vx15         -1.98412131  2.6474926   NA 0.3389130 0.3183061
-## maxO3v        0.06315522  0.4312797   NA 0.2965337 0.2761292
+## (Intercept) -23.57014311 49.6460550   NA 0.3318528 0.3112795
+## T9           -1.51704316  3.4422988   NA 0.4372792 0.4162472
+## T12          -0.48269428  3.7427321   NA 0.4652286 0.4441008
+## T15          -1.03739906  2.5925441   NA 0.4278929 0.4068964
+## Ne9          -3.48827441  0.8882550   NA 0.3115433 0.2910670
+## Ne12         -4.56779856  1.4089764   NA 0.4130960 0.3921581
+## Ne15         -2.09506127  2.6847576   NA 0.3866693 0.3658435
+## Vx9          -1.22462903  2.8745305   NA 0.2381284 0.2179961
+## Vx12         -1.38575153  3.1425424   NA 0.2731148 0.2528216
+## Vx15         -1.99623100  2.5191098   NA 0.3076203 0.2871628
+## maxO3v        0.07754285  0.4305567   NA 0.2369442 0.2168171
 ```
 *We see that the estimates are sometimes very different. However, many variables are not significant. We would like to compare the result of our linear regressions when we keep only the significant variables*
 
